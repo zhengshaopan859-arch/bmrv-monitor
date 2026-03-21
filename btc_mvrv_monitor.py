@@ -24,7 +24,7 @@ from pathlib import Path
 # ==================== 配置区域 ====================
 # OpenRouter API 配置
 # 请访问 https://openrouter.ai 获取 API Key
-OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1"
 OPENROUTER_MODEL = "openrouter/free"  # 使用免费模型
 
 # 推送标题
@@ -135,7 +135,7 @@ MVRV-Z: -0.5
 
     try:
         response = requests.post(
-            OPENROUTER_API_URL,
+            OPENROUTER_API_URL + "/chat/completions",
             headers=headers,
             json=data,
             timeout=60
