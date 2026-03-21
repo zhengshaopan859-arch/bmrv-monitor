@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 BTC MVRV 指标监控推送脚本
-使用 Google Gemini API 获取比特币 MVRV 和 MVRV-Z 指标
+使用 NVIDIA API (MiniMax 模型) 获取比特币 MVRV 和 MVRV-Z 指标
 
 作者：AI 助手
 功能:
-    1. 使用 Gemini API 搜索获取 BTC MVRV 和 MVRV-Z 指标
+    1. 使用 NVIDIA API 搜索获取 BTC MVRV 和 MVRV-Z 指标
     2. 数据来源：Newhedge.io、Glassnode 等
     3. 当 MVRV < 1 且 MVRV-Z < 0 时提醒抄底
     4. 通过飞书机器人推送通知
@@ -20,31 +20,33 @@ import sys
 from datetime import datetime, timedelta
 
 # ==================== 配置区域 ====================
-# Google Gemini API 配置
-# 请访问 https://aistudio.google.com/apikey 获取 API Key
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+# NVIDIA API 配置
+# 请访问 https://build.nvidia.com 获取 API Key
+NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+NVIDIA_MODEL = "minimaxai/minimax-m2.1"
 
 # 推送标题
 PUSH_TITLE = "📊 BTC MVRV 指标推送"
 
 # ==================== 核心功能函数 ====================
 
-def call_gemini_search(api_key, query):
+def call_nvidia_search(api_key, query):
     """
-    调用 Google Gemini API 获取相关信息
+    调用 NVIDIA API (MiniMax 模型) 获取相关信息
 
     参数:
-        api_key: Gemini API 密钥
+        api_key: NVIDIA API 密钥
         query: 搜索查询词
 
     返回:
         dict: API 返回的结果
     """
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
     }
 
-    # 构建提示词，让 Gemini 搜索并返回结构化数据
+    # 构建提示词，让 AI 搜索并返回结构化数据
     prompt = f"""请搜索并提供以下比特币指标的最新数据：
 
 查询：{query}
@@ -64,26 +66,21 @@ MVRV-Z: -0.5
 如果找不到精确数值，请说明原因。"""
 
     data = {
-        "contents": [
+        "model": NVIDIA_MODEL,
+        "messages": [
             {
-                "parts": [
-                    {
-                        "text": prompt
-                    }
-                ]
+                "role": "user",
+                "content": prompt
             }
         ],
-        "generationConfig": {
-            "temperature": 0.3,
-            "maxOutputTokens": 1000
-        }
+        "max_tokens": 1000,
+        "temperature": 0.3
     }
 
     try:
         response = requests.post(
-            GEMINI_API_URL,
+            NVIDIA_API_URL,
             headers=headers,
-            params={"key": api_key},
             json=data,
             timeout=60
         )
@@ -109,9 +106,9 @@ MVRV-Z: -0.5
         return {"error": f"未知错误：{str(e)}"}
 
 
-def extract_mvrv_from_gemini_response(response_data):
+def extract_mvrv_from_response(response_data):
     """
-    从 Gemini 响应中提取 MVRV 和 MVRV-Z 数值
+    从 API 响应中提取 MVRV 和 MVRV-Z 数值
 
     参数:
         response_data: API 返回的数据
@@ -131,11 +128,9 @@ def extract_mvrv_from_gemini_response(response_data):
     all_text = ""
 
     if isinstance(response_data, dict):
-        if "candidates" in response_data and len(response_data["candidates"]) > 0:
-            content = response_data["candidates"][0].get("content", {})
-            parts = content.get("parts", [])
-            if parts:
-                all_text = parts[0].get("text", "")
+        if "choices" in response_data and len(response_data["choices"]) > 0:
+            content = response_data["choices"][0].get("message", {})
+            all_text = content.get("content", "")
 
     print(f"📥 待解析文本：{all_text[:800]}")
 
@@ -311,7 +306,7 @@ def build_push_content(mvrv_data, mvrv, mvrv_z):
 
 ━━━━━━━━━━━━━━━━━━
 🔍 数据来源:
-  • {mvrv_data.get('source', 'Gemini 搜索')}
+  • {mvrv_data.get('source', 'NVIDIA API 搜索')}
 ━━━━━━━━━━━━━━━━━━
 
 {mvrv_data.get('details', '数据获取中...')}
@@ -341,36 +336,36 @@ def check_buy_signal(mvrv, mvrv_z):
 def main():
     """主函数"""
     print("=" * 50)
-    print("🚀 BTC MVRV 指标监控推送程序启动 (Gemini)")
+    print("🚀 BTC MVRV 指标监控推送程序启动 (NVIDIA API)")
     print("=" * 50)
 
     print("\n📋 第一步：获取配置...")
 
-    gemini_api_key = os.environ.get("GEMINI_API_KEY")
+    nvidia_api_key = os.environ.get("NVIDIA_API_KEY")
     feishu_webhook = os.environ.get("FEISHU_WEBHOOK")
 
-    if not gemini_api_key:
-        print("❌ 错误：未设置 GEMINI_API_KEY 环境变量")
-        print("请前往 https://aistudio.google.com/apikey 获取 API Key")
+    if not nvidia_api_key:
+        print("❌ 错误：未设置 NVIDIA_API_KEY 环境变量")
+        print("请前往 https://build.nvidia.com 获取 API Key")
         sys.exit(1)
 
     if not feishu_webhook:
         print("❌ 错误：未设置 FEISHU_WEBHOOK 环境变量")
         sys.exit(1)
 
-    print(f"✅ Gemini API Key 已获取 (长度：{len(gemini_api_key)})")
+    print(f"✅ NVIDIA API Key 已获取 (长度：{len(nvidia_api_key)})")
     print(f"✅ 飞书 Webhook 已获取 (长度：{len(feishu_webhook)})")
 
-    print("\n📡 第二步：调用 Gemini API 获取数据...")
+    print("\n📡 第二步：调用 NVIDIA API 获取数据...")
 
     query = build_search_query()
     print(f"🔍 搜索查询词：{query}")
 
-    gemini_response = call_gemini_search(gemini_api_key, query)
+    nvidia_response = call_nvidia_search(nvidia_api_key, query)
 
     print("\n🔧 第三步：解析 MVRV 数据...")
 
-    mvrv_data = extract_mvrv_from_gemini_response(gemini_response)
+    mvrv_data = extract_mvrv_from_response(nvidia_response)
 
     mvrv = mvrv_data.get("mvrv")
     mvrv_z = mvrv_data.get("mvrv_z")
