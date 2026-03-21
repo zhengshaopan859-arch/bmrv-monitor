@@ -130,11 +130,16 @@ def extract_mvrv_from_search_results(search_results):
     print(f"📥 搜索结果文本：{all_text[:500]}")
 
     # 使用正则表达式匹配 MVRV 和 MVRV-Z
+    # 扩展匹配模式，增加更多格式
     mvrv_patterns = [
         r"MVRV[:\s=]*(?:为|是)?\s*([0-9.]+)",
         r"MVRV\s+Ratio[:\s=]*([0-9.]+)",
         r"MVRV\s+value[:\s=]*([0-9.]+)",
+        r"MVRV\s+is\s+([0-9.]+)",
+        r"MVRV\s*=\s*([0-9.]+)",
         r"Market\s*Value\s*to\s*Realized\s*Value[:\s=]*([0-9.]+)",
+        r"current\s+MVRV\s+(?:is\s+)?([0-9.]+)",
+        r"MVRV\s+(?:ratio\s+)?(?:currently\s+)?(?:at\s+)?([0-9.]+)",
     ]
 
     mvrv_z_patterns = [
@@ -142,6 +147,10 @@ def extract_mvrv_from_search_results(search_results):
         r"MVRV[-_\s]?Z\s*Score[:\s=]*([0-9.-]+)",
         r"MVRV-Z\s*Score[:\s=]*([0-9.-]+)",
         r"MVRV-Z[:\s=]*([0-9.-]+)",
+        r"MVRV\s+Z[-\s]?Score[:\s=]*([0-9.-]+)",
+        r"MVRV\s+Z\s+is\s+([0-9.-]+)",
+        r"MVRV-Z\s+is\s+([0-9.-]+)",
+        r"Z[-\s]?Score[:\s=]*([0-9.-]+)",
     ]
 
     # 尝试匹配 MVRV
@@ -250,7 +259,8 @@ def build_search_query():
     beijing_time = datetime.utcnow() + timedelta(hours=8)
     current_date = beijing_time.strftime("%Y-%m-%d")
 
-    query = f"BTC Bitcoin MVRV ratio MVRV-Z score {current_date} CryptoQuant Glassnode on-chain data"
+    # 搜索更具体的数值来源 - lookintobitcoin 和 woobull 有免费图表
+    query = f"Bitcoin MVRV Z-Score current value {current_date} lookintobitcoin woobull charts"
     return query
 
 
