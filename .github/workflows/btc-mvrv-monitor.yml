@@ -25,6 +25,6 @@ jobs:
 
       - name: 获取 BTC MVRV 指标并推送
         env:
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
         run: python btc_mvrv_monitor.py

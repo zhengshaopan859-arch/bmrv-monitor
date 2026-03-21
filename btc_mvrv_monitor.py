@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 BTC MVRV 指标监控推送脚本
-使用 NVIDIA API (MiniMax 模型) 获取比特币 MVRV 和 MVRV-Z 指标
+使用 OpenRouter API 获取比特币 MVRV 和 MVRV-Z 指标
 
 作者：AI 助手
 功能:
-    1. 使用 NVIDIA API 搜索获取 BTC MVRV 和 MVRV-Z 指标
+    1. 使用 OpenRouter API 搜索获取 BTC MVRV 和 MVRV-Z 指标
     2. 数据来源：Newhedge.io、Glassnode 等
     3. 当 MVRV < 1 且 MVRV-Z < 0 时提醒抄底
     4. 通过飞书机器人推送通知
@@ -20,22 +20,22 @@ import sys
 from datetime import datetime, timedelta
 
 # ==================== 配置区域 ====================
-# NVIDIA API 配置
-# 请访问 https://build.nvidia.com 获取 API Key
-NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-NVIDIA_MODEL = "minimaxai/minimax-m2.1"
+# OpenRouter API 配置
+# 请访问 https://openrouter.ai 获取 API Key
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL = "openrouter/free"  # 使用免费模型
 
 # 推送标题
 PUSH_TITLE = "📊 BTC MVRV 指标推送"
 
 # ==================== 核心功能函数 ====================
 
-def call_nvidia_search(api_key, query):
+def call_openrouter_search(api_key, query):
     """
-    调用 NVIDIA API (MiniMax 模型) 获取相关信息
+    调用 OpenRouter API 获取相关信息
 
     参数:
-        api_key: NVIDIA API 密钥
+        api_key: OpenRouter API 密钥
         query: 搜索查询词
 
     返回:
@@ -43,7 +43,9 @@ def call_nvidia_search(api_key, query):
     """
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://github.com/",
+        "X-Title": "BTC MVRV Monitor"
     }
 
     # 构建提示词，让 AI 搜索并返回结构化数据
@@ -66,7 +68,7 @@ MVRV-Z: -0.5
 如果找不到精确数值，请说明原因。"""
 
     data = {
-        "model": NVIDIA_MODEL,
+        "model": OPENROUTER_MODEL,
         "messages": [
             {
                 "role": "user",
@@ -79,7 +81,7 @@ MVRV-Z: -0.5
 
     try:
         response = requests.post(
-            NVIDIA_API_URL,
+            OPENROUTER_API_URL,
             headers=headers,
             json=data,
             timeout=60
@@ -136,7 +138,7 @@ def extract_mvrv_from_response(response_data):
 
     # 使用正则表达式匹配 MVRV 和 MVRV-Z
     mvrv_patterns = [
-        r"MVRV[:\s=]*(?:为|是)?\s*([0-9.]+)",
+        r"MVRV[:\s=]*(?:为 | 是)?\s*([0-9.]+)",
         r"MVRV\s+Ratio[:\s=]*([0-9.]+)",
         r"MVRV\s+value[:\s=]*([0-9.]+)",
         r"MVRV\s+is\s+([0-9.]+)",
@@ -146,7 +148,7 @@ def extract_mvrv_from_response(response_data):
     ]
 
     mvrv_z_patterns = [
-        r"MVRV[-_\s]?Z[:\s=]*(?:为|是)?\s*([0-9.-]+)",
+        r"MVRV[-_\s]?Z[:\s=]*(?:为 | 是)?\s*([0-9.-]+)",
         r"MVRV[-_\s]?Z\s*Score[:\s=]*([0-9.-]+)",
         r"MVRV-Z\s*Score[:\s=]*([0-9.-]+)",
         r"MVRV-Z[:\s=]*([0-9.-]+)",
@@ -306,7 +308,7 @@ def build_push_content(mvrv_data, mvrv, mvrv_z):
 
 ━━━━━━━━━━━━━━━━━━
 🔍 数据来源:
-  • {mvrv_data.get('source', 'NVIDIA API 搜索')}
+  • {mvrv_data.get('source', 'OpenRouter 搜索')}
 ━━━━━━━━━━━━━━━━━━
 
 {mvrv_data.get('details', '数据获取中...')}
@@ -336,36 +338,36 @@ def check_buy_signal(mvrv, mvrv_z):
 def main():
     """主函数"""
     print("=" * 50)
-    print("🚀 BTC MVRV 指标监控推送程序启动 (NVIDIA API)")
+    print("🚀 BTC MVRV 指标监控推送程序启动 (OpenRouter)")
     print("=" * 50)
 
     print("\n📋 第一步：获取配置...")
 
-    nvidia_api_key = os.environ.get("NVIDIA_API_KEY")
+    openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
     feishu_webhook = os.environ.get("FEISHU_WEBHOOK")
 
-    if not nvidia_api_key:
-        print("❌ 错误：未设置 NVIDIA_API_KEY 环境变量")
-        print("请前往 https://build.nvidia.com 获取 API Key")
+    if not openrouter_api_key:
+        print("❌ 错误：未设置 OPENROUTER_API_KEY 环境变量")
+        print("请前往 https://openrouter.ai 获取 API Key")
         sys.exit(1)
 
     if not feishu_webhook:
         print("❌ 错误：未设置 FEISHU_WEBHOOK 环境变量")
         sys.exit(1)
 
-    print(f"✅ NVIDIA API Key 已获取 (长度：{len(nvidia_api_key)})")
+    print(f"✅ OpenRouter API Key 已获取 (长度：{len(openrouter_api_key)})")
     print(f"✅ 飞书 Webhook 已获取 (长度：{len(feishu_webhook)})")
 
-    print("\n📡 第二步：调用 NVIDIA API 获取数据...")
+    print("\n📡 第二步：调用 OpenRouter API 获取数据...")
 
     query = build_search_query()
     print(f"🔍 搜索查询词：{query}")
 
-    nvidia_response = call_nvidia_search(nvidia_api_key, query)
+    openrouter_response = call_openrouter_search(openrouter_api_key, query)
 
     print("\n🔧 第三步：解析 MVRV 数据...")
 
-    mvrv_data = extract_mvrv_from_response(nvidia_response)
+    mvrv_data = extract_mvrv_from_response(openrouter_response)
 
     mvrv = mvrv_data.get("mvrv")
     mvrv_z = mvrv_data.get("mvrv_z")
