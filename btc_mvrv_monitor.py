@@ -101,7 +101,7 @@ def extract_mvrv_from_text(text, source_domain="unknown"):
 
     print(f"📥 待解析文本：{text[:500]}")
 
-    # 扩展匹配模式
+    # 扩展匹配模式，增加更多格式
     mvrv_patterns = [
         r"MVRV[:\s=]*(?:为|是)?\s*([0-9.]+)",
         r"MVRV\s+Ratio[:\s=]*([0-9.]+)",
@@ -112,6 +112,8 @@ def extract_mvrv_from_text(text, source_domain="unknown"):
         r"current\s+MVRV\s+(?:is\s+)?([0-9.]+)",
         r"MVRV\s+(?:ratio\s+)?(?:currently\s+)?(?:at\s+)?([0-9.]+)",
         r"MVRV.*?([0-9]+\.?[0-9]*)",
+        r"MVRV\s+(?:at\s+)?([0-9]\.[0-9]+)",
+        r"ratio\s+(?:is\s+)?([0-9]\.[0-9]+)",
     ]
 
     mvrv_z_patterns = [
@@ -123,6 +125,8 @@ def extract_mvrv_from_text(text, source_domain="unknown"):
         r"MVRV\s+Z\s+is\s+([0-9.-]+)",
         r"MVRV-Z\s+is\s+([0-9.-]+)",
         r"Z[-\s]?Score[:\s=]*([0-9.-]+)",
+        r"Z-Score[:\s=]*([0-9.-]+)",
+        r"Z\s+Score[:\s=]*([0-9.-]+)",
     ]
 
     # 尝试匹配 MVRV
@@ -219,8 +223,9 @@ def search_newhedge(api_key):
     """
     print("\n🔍 优先从 Newhedge.io 搜索...")
 
-    query = "site:newhedge.io Bitcoin MVRV MVRV-Z value"
-    search_results = call_tavily_search(api_key, query)
+    # 使用更精确的搜索词，搜索包含具体数值的页面
+    query = "site:newhedge.io Bitcoin MVRV ratio Z-Score value number"
+    search_results = call_tavily_search(api_key, query, include_answer=True)
 
     if "error" in search_results:
         print(f"❌ Newhedge 搜索失败：{search_results['error']}")
@@ -277,8 +282,9 @@ def search_all_sources(api_key):
     """
     print("\n🔍 从所有来源搜索...")
 
-    query = "Bitcoin MVRV MVRV-Z score current value woobull lookintobitcoin charts"
-    search_results = call_tavily_search(api_key, query)
+    # 使用更精确的搜索词，直接搜索数值
+    query = "Bitcoin MVRV ratio value MVRV-Z Z-Score number 2026 current"
+    search_results = call_tavily_search(api_key, query, include_answer=True)
 
     if "error" in search_results:
         return {
