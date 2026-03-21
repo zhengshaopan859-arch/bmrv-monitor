@@ -135,6 +135,7 @@ def extract_mvrv_from_text(text, source_domain="unknown"):
         if match:
             try:
                 mvrv_value = float(match.group(1))
+                # 放宽范围：MVRV 值通常在 0.1 到 10 之间
                 if 0.1 <= mvrv_value <= 10:
                     result["mvrv"] = mvrv_value
                     print(f"✅ 找到 MVRV: {mvrv_value}")
@@ -148,6 +149,7 @@ def extract_mvrv_from_text(text, source_domain="unknown"):
         if match:
             try:
                 mvrv_z_value = float(match.group(1))
+                # 放宽范围：MVRV-Z 值通常在 -5 到 5 之间
                 if -5 <= mvrv_z_value <= 5:
                     result["mvrv_z"] = mvrv_z_value
                     print(f"✅ 找到 MVRV-Z: {mvrv_z_value}")
@@ -223,8 +225,8 @@ def search_newhedge(api_key):
     """
     print("\n🔍 优先从 Newhedge.io 搜索...")
 
-    # 使用更精确的搜索词，搜索包含具体数值的页面
-    query = "site:newhedge.io Bitcoin MVRV ratio Z-Score value number"
+    # 使用更精确的搜索词，直接搜索数值
+    query = "site:newhedge.io Bitcoin MVRV Z-Score value 0."
     search_results = call_tavily_search(api_key, query, include_answer=True)
 
     if "error" in search_results:
@@ -283,7 +285,7 @@ def search_all_sources(api_key):
     print("\n🔍 从所有来源搜索...")
 
     # 使用更精确的搜索词，直接搜索数值
-    query = "Bitcoin MVRV ratio value MVRV-Z Z-Score number 2026 current"
+    query = "Bitcoin MVRV Z-Score 0. Glassnode Newhedge value"
     search_results = call_tavily_search(api_key, query, include_answer=True)
 
     if "error" in search_results:
