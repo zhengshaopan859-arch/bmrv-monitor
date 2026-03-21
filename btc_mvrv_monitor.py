@@ -10,7 +10,7 @@ BTC MVRV 指标监控推送脚本
     2. 数据来源：Newhedge.io、Glassnode 等
     3. 当 MVRV < 1 且 MVRV-Z < 0 时提醒抄底
     4. 通过飞书机器人推送通知
-    5. 只在每天中午 12 点推送一次提醒
+    5. 每天只推送一次（通过推送记录文件控制）
 """
 
 import os
@@ -395,44 +395,13 @@ def main():
     print("🚀 BTC MVRV 指标监控推送程序启动 (OpenRouter)")
     print("=" * 50)
 
-    # ========== 新增：中午 12 点推送检查 ==========
-    now = datetime.now()
-    current_hour = now.hour
-    current_minute = now.minute
-
-    # 检查是否设置了测试模式环境变量
-    test_mode = os.environ.get("TEST_MODE", "false").lower() == "true"
-
-    if not test_mode:
-        # 只在 11:55 - 12:05 之间执行推送（允许前后 5 分钟误差）
-        if not (current_hour == 12 and current_minute <= 5):
-            print(f"\n⏰ 当前时间：{now.strftime('%Y-%m-%d %H:%M:%S')}")
-            print("📍 不在推送时间窗口内（中午 12:00-12:05），跳过本次推送")
-            print("=" * 50)
-            return
-
-        # 检查今天是否已经推送过
-        if not should_notify_today():
-            print(f"\n⏰ 当前时间：{now.strftime('%Y-%m-%d %H:%M:%S')}")
-            print("📍 今天已经推送过提醒，跳过本次推送")
-            print("=" * 50)
-            return
-
+    # 检查今天是否已经推送过
+    if not should_notify_today():
+        now = datetime.now()
         print(f"\n⏰ 当前时间：{now.strftime('%Y-%m-%d %H:%M:%S')}")
-        print("📍 正在执行中午 12 点推送...")
-    else:
-        print("\n🧪 测试模式：跳过时间检查")
-        # 测试模式下也要检查今天是否推送过，除非设置 TEST_FORCE=true
-        test_force = os.environ.get("TEST_FORCE", "false").lower() == "true"
-        if not test_force:
-            if not should_notify_today():
-                print(f"\n⏰ 当前时间：{now.strftime('%Y-%m-%d %H:%M:%S')}")
-                print("📍 今天已经推送过提醒，跳过本次推送")
-                print("=" * 50)
-                return
-        print(f"\n⏰ 当前时间：{now.strftime('%Y-%m-%d %H:%M:%S')}")
-        print("🧪 测试模式：强制推送")
-    # ========== 新增结束 ==========
+        print("📍 今天已经推送过提醒，跳过本次推送")
+        print("=" * 50)
+        return
 
     print("\n📋 第一步：获取配置...")
 
