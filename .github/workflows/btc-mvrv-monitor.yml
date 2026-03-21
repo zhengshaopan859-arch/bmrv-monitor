@@ -25,6 +25,6 @@ jobs:
 
       - name: 获取 BTC MVRV 指标并推送
         env:
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
         run: python btc_mvrv_monitor.py
