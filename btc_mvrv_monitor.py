@@ -6,9 +6,9 @@ BTC MVRV 指标监控推送脚本
 
 作者：AI 助手
 功能:
-    1. 使用 Tavily 搜索 API 获取 BTC MVRV 和 MVRV-Z 指标
-    2. 数据来源：CryptoQuant 和 Glassnode
-    3. 当 MVRV < 1 或 MVRV-Z < 0 时提醒抄底
+    1. 优先从 Newhedge.io 获取 BTC MVRV 和 MVRV-Z 指标
+    2. 如果获取失败，从其他数据源（woobull、lookintobitcoin）获取
+    3. 当 MVRV < 1 且 MVRV-Z < 0 时提醒抄底
     4. 通过飞书机器人推送通知
 """
 
@@ -25,17 +25,18 @@ from datetime import datetime, timedelta
 TAVILY_API_URL = "https://api.tavily.com/search"
 
 # 推送标题
-PUSH_TITLE = "📊 BTC 指标推送"
+PUSH_TITLE = "📊 BTC MVRV 指标推送"
 
 # ==================== 核心功能函数 ====================
 
-def call_tavily_search(api_key, query):
+def call_tavily_search(api_key, query, include_answer=True):
     """
     调用 Tavily 搜索 API 获取相关信息
 
     参数:
         api_key: Tavily API 密钥
         query: 搜索查询词
+        include_answer: 是否包含 AI 摘要答案
 
     返回:
         dict: API 返回的搜索结果
@@ -49,7 +50,7 @@ def call_tavily_search(api_key, query):
         "query": query,
         "search_depth": "basic",
         "max_results": 5,
-        "include_answer": True
+        "include_answer": include_answer
     }
 
     try:
@@ -60,10 +61,8 @@ def call_tavily_search(api_key, query):
             timeout=30
         )
 
-        # 打印响应状态码用于调试
         print(f"🔍 HTTP 状态码：{response.status_code}")
 
-        # 检查是否成功
         if response.status_code != 200:
             print(f"🔍 响应内容：{response.text[:500]}")
             return {"error": f"API 请求失败 (HTTP {response.status_code})：{response.text[:200]}"}
@@ -81,12 +80,13 @@ def call_tavily_search(api_key, query):
         return {"error": f"未知错误：{str(e)}"}
 
 
-def extract_mvrv_from_search_results(search_results):
+def extract_mvrv_from_text(text, source_domain="unknown"):
     """
-    从搜索结果中提取 MVRV 和 MVRV-Z 数值
+    从文本中提取 MVRV 和 MVRV-Z 数值
 
     参数:
-        search_results: Tavily 搜索返回的结果
+        text: 待解析的文本
+        source_domain: 数据来源域名
 
     返回:
         dict: 包含 mvrv, mvrv_z, source, details 的字典
@@ -94,43 +94,14 @@ def extract_mvrv_from_search_results(search_results):
     result = {
         "mvrv": None,
         "mvrv_z": None,
-        "source": "CryptoQuant / Glassnode",
+        "source": source_domain,
         "details": "",
         "success": False
     }
 
-    # 合并所有搜索结果的文本内容
-    all_text = ""
-    sources = []
+    print(f"📥 待解析文本：{text[:500]}")
 
-    # 从 answer 中提取（如果有的话）
-    if "answer" in search_results and search_results["answer"]:
-        all_text += search_results["answer"] + "\n"
-        print(f"📥 Tavily 答案：{search_results['answer'][:300]}")
-
-    # 从 results 中提取
-    if "results" in search_results:
-        for item in search_results["results"]:
-            all_text += item.get("content", "") + "\n"
-            url = item.get("url", "")
-            if url:
-                # 提取域名作为来源
-                try:
-                    from urllib.parse import urlparse
-                    domain = urlparse(url).netloc
-                    if domain and domain not in sources:
-                        sources.append(domain)
-                except:
-                    pass
-
-    if sources:
-        result["source"] = " | ".join(sources[:3])
-
-    # 打印搜索结果文本用于调试
-    print(f"📥 搜索结果文本：{all_text[:500]}")
-
-    # 使用正则表达式匹配 MVRV 和 MVRV-Z
-    # 扩展匹配模式，增加更多格式
+    # 扩展匹配模式
     mvrv_patterns = [
         r"MVRV[:\s=]*(?:为|是)?\s*([0-9.]+)",
         r"MVRV\s+Ratio[:\s=]*([0-9.]+)",
@@ -140,6 +111,7 @@ def extract_mvrv_from_search_results(search_results):
         r"Market\s*Value\s*to\s*Realized\s*Value[:\s=]*([0-9.]+)",
         r"current\s+MVRV\s+(?:is\s+)?([0-9.]+)",
         r"MVRV\s+(?:ratio\s+)?(?:currently\s+)?(?:at\s+)?([0-9.]+)",
+        r"MVRV.*?([0-9]+\.?[0-9]*)",
     ]
 
     mvrv_z_patterns = [
@@ -155,11 +127,10 @@ def extract_mvrv_from_search_results(search_results):
 
     # 尝试匹配 MVRV
     for pattern in mvrv_patterns:
-        match = re.search(pattern, all_text, re.IGNORECASE)
+        match = re.search(pattern, text, re.IGNORECASE)
         if match:
             try:
                 mvrv_value = float(match.group(1))
-                # 合理的 MVRV 值通常在 0.1 到 10 之间
                 if 0.1 <= mvrv_value <= 10:
                     result["mvrv"] = mvrv_value
                     print(f"✅ 找到 MVRV: {mvrv_value}")
@@ -169,11 +140,10 @@ def extract_mvrv_from_search_results(search_results):
 
     # 尝试匹配 MVRV-Z
     for pattern in mvrv_z_patterns:
-        match = re.search(pattern, all_text, re.IGNORECASE)
+        match = re.search(pattern, text, re.IGNORECASE)
         if match:
             try:
                 mvrv_z_value = float(match.group(1))
-                # 合理的 MVRV-Z 值通常在 -5 到 5 之间
                 if -5 <= mvrv_z_value <= 5:
                     result["mvrv_z"] = mvrv_z_value
                     print(f"✅ 找到 MVRV-Z: {mvrv_z_value}")
@@ -181,17 +151,145 @@ def extract_mvrv_from_search_results(search_results):
             except ValueError:
                 pass
 
-    # 判断是否成功提取
     result["success"] = result["mvrv"] is not None and result["mvrv_z"] is not None
 
-    # 构建详情文本
     if result["success"]:
         result["details"] = f"MVRV: {result['mvrv']}\nMVRV-Z: {result['mvrv_z']}"
     else:
-        # 如果提取失败，返回原始搜索结果的摘要
-        result["details"] = f"未能从搜索结果中提取到精确数值。\n\nTavily 回答：\n{search_results.get('answer', '无')}"
+        result["details"] = f"未能从 {source_domain} 提取到精确数值"
 
     return result
+
+
+def extract_mvrv_from_search_results(search_results):
+    """
+    从搜索结果中提取 MVRV 和 MVRV-Z 数值
+
+    参数:
+        search_results: Tavily 搜索返回的结果
+
+    返回:
+        dict: 包含 mvrv, mvrv_z, source, details 的字典
+    """
+    result = {
+        "mvrv": None,
+        "mvrv_z": None,
+        "source": "未知来源",
+        "details": "",
+        "success": False
+    }
+
+    all_text = ""
+    sources = []
+
+    # 从 answer 中提取
+    if "answer" in search_results and search_results["answer"]:
+        all_text += search_results["answer"] + "\n"
+        print(f"📥 Tavily 答案：{search_results['answer'][:300]}")
+
+    # 从 results 中提取
+    if "results" in search_results:
+        for item in search_results["results"]:
+            all_text += item.get("content", "") + "\n"
+            url = item.get("url", "")
+            if url:
+                try:
+                    from urllib.parse import urlparse
+                    domain = urlparse(url).netloc
+                    if domain and domain not in sources:
+                        sources.append(domain)
+                except:
+                    pass
+
+    if sources:
+        result["source"] = " | ".join(sources[:3])
+
+    return extract_mvrv_from_text(all_text, result["source"])
+
+
+def search_newhedge(api_key):
+    """
+    优先从 Newhedge.io 获取数据
+
+    参数:
+        api_key: Tavily API 密钥
+
+    返回:
+        dict: MVRV 数据
+    """
+    print("\n🔍 优先从 Newhedge.io 搜索...")
+
+    query = "site:newhedge.io Bitcoin MVRV MVRV-Z value"
+    search_results = call_tavily_search(api_key, query)
+
+    if "error" in search_results:
+        print(f"❌ Newhedge 搜索失败：{search_results['error']}")
+        return None
+
+    # 检查是否有来自 newhedge.io 的结果
+    if "results" in search_results:
+        newhedge_results = []
+        other_results = []
+
+        for item in search_results["results"]:
+            url = item.get("url", "").lower()
+            if "newhedge" in url:
+                newhedge_results.append(item)
+            else:
+                other_results.append(item)
+
+        # 优先处理 Newhedge 结果
+        if newhedge_results:
+            print(f"✅ 找到 {len(newhedge_results)} 条来自 Newhedge 的结果")
+            combined_text = "\n".join([item.get("content", "") for item in newhedge_results])
+            mvrv_data = extract_mvrv_from_text(combined_text, "newhedge.io")
+            if mvrv_data["success"]:
+                return mvrv_data
+
+        # 如果 Newhedge 没有精确数值，使用其他结果
+        if other_results:
+            print(f"⚠️ Newhedge 未找到精确数值，使用其他数据源")
+            combined_text = "\n".join([item.get("content", "") for item in other_results])
+            source_domains = []
+            for item in search_results["results"]:
+                try:
+                    from urllib.parse import urlparse
+                    domain = urlparse(item.get("url", "")).netloc
+                    if domain and domain not in source_domains:
+                        source_domains.append(domain)
+                except:
+                    pass
+            source = " | ".join(source_domains[:3]) if source_domains else "其他来源"
+            return extract_mvrv_from_text(combined_text, source)
+
+    return None
+
+
+def search_all_sources(api_key):
+    """
+    从所有可用来源搜索数据
+
+    参数:
+        api_key: Tavily API 密钥
+
+    返回:
+        dict: MVRV 数据
+    """
+    print("\n🔍 从所有来源搜索...")
+
+    query = "Bitcoin MVRV MVRV-Z score current value woobull lookintobitcoin charts"
+    search_results = call_tavily_search(api_key, query)
+
+    if "error" in search_results:
+        return {
+            "mvrv": None,
+            "mvrv_z": None,
+            "source": "搜索失败",
+            "details": f"搜索失败：{search_results['error']}",
+            "success": False
+        }
+
+    return extract_mvrv_from_search_results(search_results)
 
 
 def send_feishu_push(webhook_url, title, content):
@@ -206,7 +304,6 @@ def send_feishu_push(webhook_url, title, content):
     返回:
         bool: 推送是否成功
     """
-    # 飞书富文本消息格式
     data = {
         "msg_type": "interactive",
         "card": {
@@ -246,22 +343,6 @@ def send_feishu_push(webhook_url, title, content):
     except Exception as e:
         print(f"❌ 飞书请求失败：{str(e)}")
         return False
-
-
-def build_search_query():
-    """
-    构建搜索查询词
-
-    返回:
-        str: 格式化后的搜索查询词
-    """
-    # 获取当前日期
-    beijing_time = datetime.utcnow() + timedelta(hours=8)
-    current_date = beijing_time.strftime("%Y-%m-%d")
-
-    # 搜索更具体的数值来源 - lookintobitcoin, woobull, newhedge 有免费图表
-    query = f"Bitcoin MVRV Z-Score current value {current_date} lookintobitcoin woobull newhedge"
-    return query
 
 
 def build_push_content(mvrv_data, mvrv, mvrv_z):
@@ -321,11 +402,11 @@ def build_push_content(mvrv_data, mvrv, mvrv_z):
 📌 结论：未达到抄底条件
 """
 
-    content = f"""📈 BTC 指标早报
+    content = f"""📈 BTC MVRV 指标早报
 
 ━━━━━━━━━━━━━━━━━━
 🔍 数据来源:
-  • {mvrv_data.get('source', 'CryptoQuant / Glassnode')}
+  • {mvrv_data.get('source', '未知')}
 ━━━━━━━━━━━━━━━━━━
 
 {mvrv_data.get('details', '数据获取中...')}
@@ -372,8 +453,8 @@ def main():
 
     流程:
     1. 获取环境变量中的 API Key
-    2. 调用 Tavily 搜索 API 获取 MVRV 数据
-    3. 解析数据
+    2. 优先从 Newhedge 获取数据
+    3. 如果失败，从其他来源获取
     4. 发送飞书推送
     """
     print("=" * 50)
@@ -398,40 +479,27 @@ def main():
     print(f"✅ Tavily API Key 已获取 (长度：{len(tavily_api_key)})")
     print(f"✅ 飞书 Webhook 已获取 (长度：{len(feishu_webhook)})")
 
-    print("\n📡 第二步：调用 Tavily 搜索 API...")
+    print("\n📡 第二步：获取 MVRV 数据...")
 
-    query = build_search_query()
-    print(f"🔍 搜索查询词：{query}")
+    # 优先从 Newhedge 获取
+    mvrv_data = search_newhedge(tavily_api_key)
 
-    search_results = call_tavily_search(tavily_api_key, query)
-
-    if "error" in search_results:
-        print(f"❌ Tavily API 错误：{search_results['error']}")
-        mvrv_data = {
-            "mvrv": None,
-            "mvrv_z": None,
-            "source": "CryptoQuant / Glassnode",
-            "details": f"搜索失败：{search_results['error']}",
-            "success": False
-        }
-    else:
-        print(f"📥 搜索结果数量：{len(search_results.get('results', []))}")
-
-        print("\n🔧 第三步：解析 MVRV 数据...")
-
-        mvrv_data = extract_mvrv_from_search_results(search_results)
+    # 如果 Newhedge 没有成功获取，使用其他来源
+    if not mvrv_data or not mvrv_data.get("success"):
+        mvrv_data = search_all_sources(tavily_api_key)
 
     mvrv = mvrv_data.get("mvrv")
     mvrv_z = mvrv_data.get("mvrv_z")
 
     if mvrv_data.get("success"):
-        print(f"✅ MVRV 解析成功：{mvrv}")
+        print(f"\n✅ MVRV 解析成功：{mvrv}")
         print(f"✅ MVRV-Z 解析成功：{mvrv_z}")
+        print(f"✅ 数据来源：{mvrv_data.get('source', '未知')}")
     else:
-        print(f"⚠️ 数据解析失败，使用原始搜索结果")
-        print(f"📋 原始详情：{mvrv_data.get('details', '')[:200]}")
+        print(f"\n⚠️ 数据解析失败")
+        print(f"📋 详情：{mvrv_data.get('details', '')}")
 
-    print("\n📱 第四步：发送飞书推送...")
+    print("\n📱 第三步：发送飞书推送...")
 
     push_content = build_push_content(mvrv_data, mvrv, mvrv_z)
 
