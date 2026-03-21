@@ -259,8 +259,8 @@ def build_search_query():
     beijing_time = datetime.utcnow() + timedelta(hours=8)
     current_date = beijing_time.strftime("%Y-%m-%d")
 
-    # 搜索更具体的数值来源 - lookintobitcoin 和 woobull 有免费图表
-    query = f"Bitcoin MVRV Z-Score current value {current_date} lookintobitcoin woobull charts"
+    # 搜索更具体的数值来源 - lookintobitcoin, woobull, newhedge 有免费图表
+    query = f"Bitcoin MVRV Z-Score current value {current_date} lookintobitcoin woobull newhedge"
     return query
 
 
@@ -276,15 +276,50 @@ def build_push_content(mvrv_data, mvrv, mvrv_z):
     返回:
         str: 格式化的推送内容
     """
-    # 构建抄底信号
+    # 构建抄底信号判断
     buy_signal = ""
     if mvrv is not None and mvrv_z is not None:
-        if mvrv < 1:
-            buy_signal += f"\n🎯 **抄底信号**: MVRV = {mvrv} < 1 (低估区域!)\n"
-        if mvrv_z < 0:
-            buy_signal += f"\n🎯 **抄底信号**: MVRV-Z = {mvrv_z} < 0 (低估区域!)\n"
-        if mvrv >= 1 and mvrv_z >= 0:
-            buy_signal += f"\n💰 当前 MVRV = {mvrv} >= 1, MVRV-Z = {mvrv_z} >= 0，暂未达到抄底条件\n"
+        mvrv_ok = mvrv < 1
+        mvrv_z_ok = mvrv_z < 0
+
+        # 同时满足两个条件才建议抄底
+        if mvrv_ok and mvrv_z_ok:
+            buy_signal = f"""
+🎯 ⚠️ 【强烈抄底信号】⚠️ 🎯
+━━━━━━━━━━━━━━━━━━
+✅ MVRV = {mvrv} < 1 (低估)
+✅ MVRV-Z = {mvrv_z} < 0 (低估)
+━━━━━━━━━━━━━━━━━━
+📌 结论：两个指标都满足抄底条件！
+💰 建议：可以考虑分批建仓
+"""
+        elif mvrv_ok:
+            buy_signal = f"""
+🎯 【部分抄底信号】
+━━━━━━━━━━━━━━━━━━
+✅ MVRV = {mvrv} < 1 (低估)
+❌ MVRV-Z = {mvrv_z} >= 0 (正常)
+━━━━━━━━━━━━━━━━━━
+📌 结论：仅 MVRV 满足条件，建议观望
+"""
+        elif mvrv_z_ok:
+            buy_signal = f"""
+🎯 【部分抄底信号】
+━━━━━━━━━━━━━━━━━━
+❌ MVRV = {mvrv} >= 1 (正常)
+✅ MVRV-Z = {mvrv_z} < 0 (低估)
+━━━━━━━━━━━━━━━━━━
+📌 结论：仅 MVRV-Z 满足条件，建议观望
+"""
+        else:
+            buy_signal = f"""
+💰 【暂不建议抄底】
+━━━━━━━━━━━━━━━━━━
+❌ MVRV = {mvrv} >= 1 (正常)
+❌ MVRV-Z = {mvrv_z} >= 0 (正常)
+━━━━━━━━━━━━━━━━━━
+📌 结论：未达到抄底条件
+"""
 
     content = f"""📈 BTC 指标早报
 
