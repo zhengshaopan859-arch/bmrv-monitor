@@ -276,6 +276,20 @@ def get_mvrv_data_with_browser():
 
             page = browser.new_page()
 
+            # 设置 User-Agent 模拟真实浏览器
+            page.set_extra_http_headers({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            })
+
+            # 禁用 webdriver 属性
+            page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+            """)
+
             mvrv = get_mvrv_data(page)
             result["mvrv"] = mvrv
 
