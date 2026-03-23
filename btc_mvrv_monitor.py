@@ -30,7 +30,7 @@ except ImportError:
 
 # ==================== 配置区域 ====================
 # Chrome 浏览器路径（请根据实际路径修改）
-CHROME_PATH = r"D:\Users\zsp\AppData\Local\Programs\chrome-win64\chrome.exe"
+CHROME_PATH = r"C:\Users\zsp\AppData\Local\Google\Chrome\Application\chrome.exe"
 
 # 数据源 URLs
 MVRV_URL = "https://newhedge.io/bitcoin/mvrv"
@@ -97,48 +97,70 @@ def get_mvrv_data(page):
     """
     print(f"🔍 正在访问：{MVRV_URL}")
 
-    try:
-        page.goto(MVRV_URL, timeout=60000)
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(3000)
+    for attempt in range(3):
+        try:
+            page.goto(MVRV_URL, timeout=60000, wait_until="domcontentloaded")
+            page.wait_for_timeout(5000)
 
-        content = page.content()
+            content = page.content()
 
-        patterns = [
-            r'MVRV[\s\S]*?([0-9.]+)',
-            r'([0-9.]+)[\s\S]*?MVRV',
-            r'mvrv["\s:]+([0-9.]+)',
-            r'"value"[:\s]+([0-9.]+)',
-        ]
+            patterns = [
+                r'MVRV["\s:>]+([0-9.]+)',
+                r'([0-9.]+)[\s\S]*?MVRV',
+                r'"mvrv"[:\s]+([0-9.]+)',
+                r'"value"[:\s]+([0-9.]+)',
+            ]
 
-        for pattern in patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
+            for pattern in patterns:
+                match = re.search(pattern, content, re.IGNORECASE)
+                if match:
+                    try:
+                        value = float(match.group(1))
+                        if 0.1 <= value <= 10:
+                            print(f"✅ 找到 MVRV: {value}")
+                            return value
+                    except ValueError:
+                        continue
+
+            page_text = page.inner_text("body")
+
+            mvrv_match = re.search(r'MVRV[\s\n\r]*?([0-9]+\.?[0-9]*)', page_text, re.IGNORECASE)
+            if mvrv_match:
                 try:
-                    value = float(match.group(1))
+                    value = float(mvrv_match.group(1))
+                    if 0.1 <= value <= 10:
+                        print(f"✅ 找到 MVRV: {value}")
+                        return value
+                except ValueError:
+                    pass
+
+            numbers = re.findall(r'\b([0-9]+\.[0-9]{2,4})\b', page_text)
+            for num in numbers:
+                try:
+                    value = float(num)
                     if 0.1 <= value <= 10:
                         print(f"✅ 找到 MVRV: {value}")
                         return value
                 except ValueError:
                     continue
 
-        page_text = page.inner_text("body")
-        numbers = re.findall(r'\b([0-9]+\.[0-9]+)\b', page_text)
-        for num in numbers:
-            try:
-                value = float(num)
-                if 0.1 <= value <= 10:
-                    print(f"✅ 找到 MVRV: {value}")
-                    return value
-            except ValueError:
+            if attempt < 2:
+                print(f"⚠️ 第 {attempt + 1} 次尝试未能获取 MVRV，重试中...")
+                page.wait_for_timeout(3000)
                 continue
 
-        print(f"⚠️ 未能从页面提取 MVRV 数据")
-        return None
+            print(f"⚠️ 未能从页面提取 MVRV 数据")
+            return None
 
-    except Exception as e:
-        print(f"❌ 获取 MVRV 数据失败：{e}")
-        return None
+        except Exception as e:
+            if attempt < 2:
+                print(f"⚠️ 第 {attempt + 1} 次尝试失败：{e}，重试中...")
+                page.wait_for_timeout(3000)
+                continue
+            print(f"❌ 获取 MVRV 数据失败：{e}")
+            return None
+
+    return None
 
 
 def get_mvrv_z_score_data(page):
@@ -151,51 +173,73 @@ def get_mvrv_z_score_data(page):
     返回:
         float: MVRV-Z 值，失败返回 None
     """
-    print(f"� 正在访问：{MVRV_Z_SCORE_URL}")
+    print(f"🔍 正在访问：{MVRV_Z_SCORE_URL}")
 
-    try:
-        page.goto(MVRV_Z_SCORE_URL, timeout=60000)
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(3000)
+    for attempt in range(3):
+        try:
+            page.goto(MVRV_Z_SCORE_URL, timeout=60000, wait_until="domcontentloaded")
+            page.wait_for_timeout(5000)
 
-        content = page.content()
+            content = page.content()
 
-        patterns = [
-            r'MVRV-Z[\s\S]*?([\-\d.]+)',
-            r'Z-Score[\s\S]*?([\-\d.]+)',
-            r'([\-\d.]+)[\s\S]*?Z-Score',
-            r'"value"[:\s]+([\-\d.]+)',
-            r'zscore["\s:]+([\-\d.]+)',
-        ]
+            patterns = [
+                r'MVRV-Z["\s:>]+?([\-\d.]+)',
+                r'Z-Score["\s:>]+?([\-\d.]+)',
+                r'([\-\d.]+)[\s\S]*?Z-Score',
+                r'"zscore"[:\s]+([\-\d.]+)',
+                r'"value"[:\s]+([\-\d.]+)',
+            ]
 
-        for pattern in patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
+            for pattern in patterns:
+                match = re.search(pattern, content, re.IGNORECASE)
+                if match:
+                    try:
+                        value = float(match.group(1))
+                        if -5 <= value <= 10:
+                            print(f"✅ 找到 MVRV-Z: {value}")
+                            return value
+                    except ValueError:
+                        continue
+
+            page_text = page.inner_text("body")
+
+            zscore_match = re.search(r'MVRV[-\s]?Z[\s\n\r]*?([\-\d]+\.?[0-9]*)', page_text, re.IGNORECASE)
+            if zscore_match:
                 try:
-                    value = float(match.group(1))
+                    value = float(zscore_match.group(1))
+                    if -5 <= value <= 10:
+                        print(f"✅ 找到 MVRV-Z: {value}")
+                        return value
+                except ValueError:
+                    pass
+
+            numbers = re.findall(r'\b([\-\d]+\.[0-9]{2,4})\b', page_text)
+            for num in numbers:
+                try:
+                    value = float(num)
                     if -5 <= value <= 10:
                         print(f"✅ 找到 MVRV-Z: {value}")
                         return value
                 except ValueError:
                     continue
 
-        page_text = page.inner_text("body")
-        numbers = re.findall(r'\b([\-\d]+\.[0-9]+)\b', page_text)
-        for num in numbers:
-            try:
-                value = float(num)
-                if -5 <= value <= 10:
-                    print(f"✅ 找到 MVRV-Z: {value}")
-                    return value
-            except ValueError:
+            if attempt < 2:
+                print(f"⚠️ 第 {attempt + 1} 次尝试未能获取 MVRV-Z，重试中...")
+                page.wait_for_timeout(3000)
                 continue
 
-        print(f"⚠️ 未能从页面提取 MVRV-Z 数据")
-        return None
+            print(f"⚠️ 未能从页面提取 MVRV-Z 数据")
+            return None
 
-    except Exception as e:
-        print(f"❌ 获取 MVRV-Z 数据失败：{e}")
-        return None
+        except Exception as e:
+            if attempt < 2:
+                print(f"⚠️ 第 {attempt + 1} 次尝试失败：{e}，重试中...")
+                page.wait_for_timeout(3000)
+                continue
+            print(f"❌ 获取 MVRV-Z 数据失败：{e}")
+            return None
+
+    return None
 
 
 def get_mvrv_data_with_browser():
