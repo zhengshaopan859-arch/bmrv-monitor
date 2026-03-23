@@ -29,7 +29,7 @@ except ImportError:
     sys.exit(1)
 
 # ==================== 配置区域 ====================
-# Chrome 浏览器路径（请根据实际路径修改）
+# Chrome 浏览器路径（Windows 本地环境使用，GitHub Actions 会自动使用默认 Chromium）
 CHROME_PATH = r"C:\Users\zsp\AppData\Local\Google\Chrome\Application\chrome.exe"
 
 # 数据源 URLs
@@ -259,13 +259,19 @@ def get_mvrv_data_with_browser():
         with sync_playwright() as p:
             print("🚀 启动浏览器...")
 
+            import platform
+            system = platform.system()
+
             try:
-                browser = p.chromium.launch(
-                    headless=True,
-                    executable_path=CHROME_PATH
-                )
+                if system == "Windows":
+                    browser = p.chromium.launch(
+                        headless=True,
+                        executable_path=CHROME_PATH
+                    )
+                else:
+                    browser = p.chromium.launch(headless=True)
             except Exception as e:
-                print(f"⚠️ 无法使用指定 Chrome，尝试默认浏览器：{e}")
+                print(f"⚠️ 启动浏览器失败，使用默认设置：{e}")
                 browser = p.chromium.launch(headless=True)
 
             page = browser.new_page()
