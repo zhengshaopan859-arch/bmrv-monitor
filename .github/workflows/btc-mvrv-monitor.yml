@@ -19,12 +19,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 安装依赖
+      - name: 安装 Playwright 和依赖
         run: |
-          pip install requests
+          pip install playwright requests
+          playwright install chromium
 
       - name: 获取 BTC MVRV 指标并推送
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
         run: python btc_mvrv_monitor.py
